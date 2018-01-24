@@ -29,14 +29,13 @@ description_boundary = '_-- Alertmanager -- [only edit above]_'
 
 # Order for the search query is important for the query performance. It relies
 # on the 'alert_group_key' field in the description that must not be modified.
-search_query = 'project = %s and labels = "alert" and description ~ "alert_group_key=%s"'
+search_query = 'project = %s and labels = "alert" and status not in (%s) and description ~ "alert_group_key=%s"'
 
 jira_request_time = prometheus.Histogram('jira_request_latency_seconds', 'Latency when querying the JIRA API', ['action'])
 request_time = prometheus.Histogram('request_latency_seconds', 'Latency of incoming requests')
 
 jira_request_time_transitions = jira_request_time.labels({'action': 'transitions'})
 jira_request_time_close = jira_request_time.labels({'action': 'close'})
-jira_request_time_reopen = jira_request_time.labels({'action': 'reopen'})
 jira_request_time_update = jira_request_time.labels({'action': 'update'})
 jira_request_time_create = jira_request_time.labels({'action': 'create'})
 
@@ -47,10 +46,6 @@ def transitions(issue):
 @jira_request_time_close.time()
 def close(issue, tid):
     return jira.transition_issue(issue, tid)
-
-@jira_request_time_reopen.time()
-def reopen(issue, tid):
-    return jira.transition_issue(issue, trans['reopen'])
 
 @jira_request_time_update.time()
 def update_issue(issue, summary, description):
@@ -88,30 +83,20 @@ def file_issue(project, issue_type):
     description = description_tmpl.render(data)
     summary = summary_tmpl.render(data)
 
-    # If there's already a ticket for the incident, update it and reopen/close if necessary.
-    result = jira.search_issues(search_query % (project, prepareGroupKey(data['groupKey'])))
+    # If there's already a ticket for the incident, update it and close if necessary.
+    result = jira.search_issues(search_query % (
+        project, ','.join(resolved_status), prepareGroupKey(data['groupKey'])))
     if result:
         issue = result[0]
-
-        # We have to check the available transitions for the issue. These differ
-        # between boards depending on setup.
-        trans = {}
-        for t in transitions(issue):
-            trans[t['name'].lower()] = t['id']
 
         # Try different possible transitions for resolved incidents
         # in order of preference. Different ones may work for different boards.
         if resolved:
-            for t in ["resolved", "closed", "done", "complete"]:
-                if t in trans:
-                    close(issue, trans[t])
-                    break
-        # For issues that are closed by one of the status definitions below, reopen them.
-        elif issue.fields.status.name.lower() in ["resolved", "closed", "done", "complete"]:
-            for t in trans:
-                if t in ['reopen', 'open']:
-                    reopen(issue, trans[t])
-                    break
+            valid_trans = [t for t in transitions(issue) if t['name'].lower() in resolve_transitions]
+            if valid_trans:
+                close(issue, valid_trans[0]['id'])
+            else:
+                print("Unable to find transition to close %s" % issue)
 
         # Update the base information regardless of the transition.
         update_issue(issue, summary, description)
@@ -133,14 +118,21 @@ def metrics():
 @click.command()
 @click.option('--host', help='Host listen address')
 @click.option('--port', '-p', default=9050, help='Listen port for the webhook')
+@click.option('--res_transitions', default="resolve issue,close issue",
+              help='Comma separated list of known transitions used to resolve alerts')
+@click.option('--res_status', default="resolved,closed,fixed,done,complete",
+              help='Comma separated list of known resolved status')
 @click.option('--debug', '-d', default=False, is_flag=True, help='Enable debug mode')
 @click.argument('server')
-def main(host, port, server, debug):
+def main(host, port, server, res_transitions, res_status, debug):
     global jira
+
+    global resolve_transitions, resolved_status
+    resolve_transitions = res_transitions.split(',')
+    resolved_status = res_status.split(',')
 
     username = os.environ.get('JIRA_USERNAME')
     password = os.environ.get('JIRA_PASSWORD')
-
     if not username or not password:
         print("JIRA_USERNAME or JIRA_PASSWORD not set")
         sys.exit(2)
