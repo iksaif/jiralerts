@@ -60,13 +60,13 @@ def update_issue(issue, summary, description):
         description="%s\n\n%s\n%s" % (custom_desc.strip(), description_boundary, description))
 
 @jira_request_time_create.time()
-def create_issue(project, team, summary, description):
+def create_issue(project, issue_type, summary, description):
     return jira.create_issue({
         'project': {'key': project},
         'summary': summary,
         'description': "%s\n\n%s" % (description_boundary, description),
-        'issuetype': {'name': 'Task'},
-        'labels': ['alert', team],
+        'issuetype': {'name': issue_type},
+        'labels': ['alert', ],
     })
 
 @app.route('/-/health')
@@ -74,8 +74,8 @@ def health():
     return "OK", 200
 
 @request_time.time()
-@app.route('/issues/<project>/<team>', methods=['POST'])
-def file_issue(project, team):
+@app.route('/issues/<project>/<issue_type>', methods=['POST'])
+def file_issue(project, issue_type):
     """
     This endpoint accepts a JSON encoded notification according to the version 3 or 4
     of the generic webhook of the Prometheus Alertmanager.
@@ -118,7 +118,7 @@ def file_issue(project, team):
 
     # Do not create an issue for resolved incidents that were never filed.
     elif not resolved:
-        create_issue(project, team, summary, description)
+        create_issue(project, issue_type, summary, description)
 
     return "", 200
 
