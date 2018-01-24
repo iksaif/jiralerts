@@ -6,41 +6,20 @@ import sys
 import click
 from flask import Flask, request, make_response
 from jira import JIRA
-from jinja2 import Template
+import jinja2
 import prometheus_client as prometheus
 
 app = Flask(__name__)
 
 jira = None
 
-summary_tmpl = Template(r'{% if commonAnnotations.summary %}{{ commonAnnotations.summary }}{% else %}{% for k, v in groupLabels.items() %}{{ k }}="{{v}}" {% endfor %}{% endif %}')
 
-description_tmpl = Template(r'''
-h2. Common information
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-{% for k, v in commonAnnotations.items() -%}
-* *{{ k }}*: {{ v }}
-{% endfor %}
+JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
 
-h2. Active alerts
-
-{% for a in alerts if a.status == 'firing' -%}
-_Annotations_:
-  {% for k, v in a.annotations.items() -%}
-* {{ k }} = {{ v }}
-  {% endfor %}
-_Labels_:
-  {% for k, v in a.labels.items() -%}
-* {{ k }} = {{ v }}
-  {% endfor %}
-[Source|{{ a.generatorURL }}]
-----
-{% endfor %}
-
-
-alert_group_key={{ groupKey }}
-''')
-
+summary_tmpl = JINJA_ENV.get_template('templates/summary.tmpl')
+description_tmpl = JINJA_ENV.get_template('templates/description.tmpl')
 description_boundary = '_-- Alertmanager -- [only edit above]_'
 
 # Order for the search query is important for the query performance. It relies
@@ -166,4 +145,3 @@ def main(host, port, server, debug):
 
 if __name__ == "__main__":
     main()
-

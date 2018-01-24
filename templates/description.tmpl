@@ -1,0 +1,23 @@
+h2. Common information
+
+{% for k, v in commonAnnotations.items() -%}
+* *{{ k }}*: {{ v }}
+{% endfor %}
+
+h2. Active alerts
+
+{% for a in alerts if a.status == 'firing' -%}
+_Annotations_:
+  {% for k, v in a.annotations.items() -%}
+* {{ k }} = {{ v }}
+  {% endfor %}
+_Labels_:
+  {% for k, v in a.labels.items() -%}
+* {{ k }} = {{ v }}
+  {% endfor %}
+[Source|{{ a.generatorURL }}]
+----
+{% endfor %}
+
+
+alert_group_key={{ groupKey }}

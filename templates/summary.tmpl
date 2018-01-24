@@ -1,0 +1,1 @@
+{% if commonAnnotations.summary %}{{ commonAnnotations.summary }}{% else %}{% for k, v in groupLabels.items() %}{{ k }}="{{v}}" {% endfor %}{% endif %}
