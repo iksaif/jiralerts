@@ -3,6 +3,7 @@
 import os
 import sys
 
+import base64
 import click
 from flask import Flask, request, make_response
 from jira import JIRA
@@ -16,7 +17,11 @@ jira = None
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+def prepareGroupKey(gk):
+    return base64.b64encode(gk.encode())
+
 JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
+JINJA_ENV.filters['prepareGroupKey'] = prepareGroupKey
 
 summary_tmpl = JINJA_ENV.get_template('templates/summary.tmpl')
 description_tmpl = JINJA_ENV.get_template('templates/description.tmpl')
@@ -72,11 +77,11 @@ def health():
 @app.route('/issues/<project>/<team>', methods=['POST'])
 def file_issue(project, team):
     """
-    This endpoint accepts a JSON encoded notification according to the version 3
+    This endpoint accepts a JSON encoded notification according to the version 3 or 4
     of the generic webhook of the Prometheus Alertmanager.
     """
     data = request.get_json()
-    if data['version'] != "3":
+    if data['version'] not in ["3", "4"]:
         return "unknown message version %s" % data['version'], 400
 
     resolved = data['status'] == "resolved"
@@ -84,7 +89,7 @@ def file_issue(project, team):
     summary = summary_tmpl.render(data)
 
     # If there's already a ticket for the incident, update it and reopen/close if necessary.
-    result = jira.search_issues(search_query % (project, data['groupKey']))
+    result = jira.search_issues(search_query % (project, prepareGroupKey(data['groupKey'])))
     if result:
         issue = result[0]
 
