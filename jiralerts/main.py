@@ -17,8 +17,10 @@ jira = None
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 def prepareGroupKey(gk):
     return base64.b64encode(gk.encode())
+
 
 JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
 JINJA_ENV.filters['prepareGroupKey'] = prepareGroupKey
@@ -29,23 +31,32 @@ description_boundary = '_-- Alertmanager -- [only edit above]_'
 
 # Order for the search query is important for the query performance. It relies
 # on the 'alert_group_key' field in the description that must not be modified.
-search_query = 'project = %s and labels = "alert" and status not in (%s) and description ~ "alert_group_key=%s"'
+search_query = 'project = %s and ' + \
+               'labels = "alert" and ' + \
+               'status not in (%s) and ' + \
+               'description ~ "alert_group_key=%s"'
 
-jira_request_time = prometheus.Histogram('jira_request_latency_seconds', 'Latency when querying the JIRA API', ['action'])
-request_time = prometheus.Histogram('request_latency_seconds', 'Latency of incoming requests')
+jira_request_time = prometheus.Histogram('jira_request_latency_seconds',
+                                         'Latency when querying the JIRA API',
+                                         ['action'])
+request_time = prometheus.Histogram('request_latency_seconds',
+                                    'Latency of incoming requests')
 
 jira_request_time_transitions = jira_request_time.labels({'action': 'transitions'})
 jira_request_time_close = jira_request_time.labels({'action': 'close'})
 jira_request_time_update = jira_request_time.labels({'action': 'update'})
 jira_request_time_create = jira_request_time.labels({'action': 'create'})
 
+
 @jira_request_time_transitions.time()
 def transitions(issue):
     return jira.transitions(issue)
 
+
 @jira_request_time_close.time()
 def close(issue, tid):
     return jira.transition_issue(issue, tid)
+
 
 @jira_request_time_update.time()
 def update_issue(issue, summary, description):
@@ -53,6 +64,7 @@ def update_issue(issue, summary, description):
     return issue.update(
         summary=summary,
         description="%s\n\n%s\n%s" % (custom_desc.strip(), description_boundary, description))
+
 
 @jira_request_time_create.time()
 def create_issue(project, issue_type, summary, description):
@@ -64,9 +76,11 @@ def create_issue(project, issue_type, summary, description):
         'labels': ['alert', ],
     })
 
+
 @app.route('/-/health')
 def health():
     return "OK", 200
+
 
 @request_time.time()
 @app.route('/issues/<project>/<issue_type>', methods=['POST'])
@@ -92,7 +106,8 @@ def file_issue(project, issue_type):
         # Try different possible transitions for resolved incidents
         # in order of preference. Different ones may work for different boards.
         if resolved:
-            valid_trans = [t for t in transitions(issue) if t['name'].lower() in resolve_transitions]
+            valid_trans = [
+                t for t in transitions(issue) if t['name'].lower() in resolve_transitions]
             if valid_trans:
                 close(issue, valid_trans[0]['id'])
             else:
@@ -139,6 +154,7 @@ def main(host, port, server, res_transitions, res_status, debug):
 
     jira = JIRA(basic_auth=(username, password), server=server, logging=debug)
     app.run(host=host, port=port, debug=debug)
+
 
 if __name__ == "__main__":
     main()
