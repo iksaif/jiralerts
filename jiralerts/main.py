@@ -5,7 +5,7 @@ import sys
 
 import base64
 import click
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, redirect, url_for
 from jira import JIRA
 import jinja2
 import prometheus_client as prometheus
@@ -39,13 +39,16 @@ search_query = 'project = %s and ' + \
 jira_request_time = prometheus.Histogram('jira_request_latency_seconds',
                                          'Latency when querying the JIRA API',
                                          ['action'])
-request_time = prometheus.Histogram('request_latency_seconds',
-                                    'Latency of incoming requests')
+jira_request_time_transitions = jira_request_time.labels(action='transitions')
+jira_request_time_close = jira_request_time.labels(action='close')
+jira_request_time_update = jira_request_time.labels(action='update')
+jira_request_time_create = jira_request_time.labels(action='create')
 
-jira_request_time_transitions = jira_request_time.labels({'action': 'transitions'})
-jira_request_time_close = jira_request_time.labels({'action': 'close'})
-jira_request_time_update = jira_request_time.labels({'action': 'update'})
-jira_request_time_create = jira_request_time.labels({'action': 'create'})
+request_time = prometheus.Histogram('request_latency_seconds',
+                                    'Latency of incoming requests',
+                                    ['endpoint'])
+request_time_generic_issues = request_time.labels(endpoint='/issues')
+request_time_qualified_issues = request_time.labels(endpoint='/issues/<project>/<issue_type>')
 
 
 @jira_request_time_transitions.time()
@@ -82,7 +85,27 @@ def health():
     return "OK", 200
 
 
-@request_time.time()
+@request_time_generic_issues.time()
+@app.route('/issues', methods=['POST'])
+def parse_issue_params():
+    """
+    This endpoint accepts a JSON encoded notification according to the version 3 or 4
+    of the generic webhook of the Prometheus Alertmanager.
+    """
+    data = request.get_json()
+    if data['version'] not in ["3", "4"]:
+        return "unknown message version %s" % data['version'], 400
+
+    commonLabels = data['commonLabels']
+    if 'issue_type' not in commonLabels or 'project' not in commonLabels:
+        return "Required commonLabels not found: issue_type or project", 400
+
+    issue_type = commonLabels['issue_type']
+    project = commonLabels['project']
+    return file_issue(project=project, issue_type=issue_type)
+
+
+@request_time_qualified_issues.time()
 @app.route('/issues/<project>/<issue_type>', methods=['POST'])
 def file_issue(project, issue_type):
     """
