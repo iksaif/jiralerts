@@ -22,6 +22,17 @@ def prepareGroupKey(gk):
     return base64.b64encode(gk.encode())
 
 
+def prepareTags(commonLabels):
+    tags_whitelist = ['severity', 'dc', 'env', 'perimeter', 'team']
+    tags = ['alert', ]
+    for k, v in commonLabels.items():
+        if k in tags_whitelist:
+            tags.append('%s:%s' % (k, v))
+        if k == 'tags':
+            tags.extend([tag.strip() for tag in v.split(',') if tag])
+    return tags
+
+
 JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
 JINJA_ENV.filters['prepareGroupKey'] = prepareGroupKey
 
@@ -32,6 +43,7 @@ description_boundary = '_-- Alertmanager -- [only edit above]_'
 # Order for the search query is important for the query performance. It relies
 # on the 'alert_group_key' field in the description that must not be modified.
 search_query = 'project = %s and ' + \
+               'issuetype = %s and ' + \
                'labels = "alert" and ' + \
                'status not in (%s) and ' + \
                'description ~ "alert_group_key=%s"'
@@ -70,13 +82,13 @@ def update_issue(issue, summary, description):
 
 
 @jira_request_time_create.time()
-def create_issue(project, issue_type, summary, description):
+def create_issue(project, issue_type, summary, description, tags):
     return jira.create_issue({
         'project': {'key': project},
         'summary': summary,
         'description': "%s\n\n%s" % (description_boundary, description),
         'issuetype': {'name': issue_type},
-        'labels': ['alert', ],
+        'labels': tags,
     })
 
 
@@ -117,12 +129,13 @@ def file_issue(project, issue_type):
         return "unknown message version %s" % data['version'], 400
 
     resolved = data['status'] == "resolved"
+    tags = prepareTags(data['commonLabels'])
     description = description_tmpl.render(data)
     summary = summary_tmpl.render(data)
 
     # If there's already a ticket for the incident, update it and close if necessary.
     result = jira.search_issues(search_query % (
-        project, ','.join(resolved_status), prepareGroupKey(data['groupKey'])))
+        project, issue_type, ','.join(resolved_status), prepareGroupKey(data['groupKey'])))
     if result:
         issue = result[0]
 
@@ -141,7 +154,7 @@ def file_issue(project, issue_type):
 
     # Do not create an issue for resolved incidents that were never filed.
     elif not resolved:
-        create_issue(project, issue_type, summary, description)
+        create_issue(project, issue_type, summary, description, tags)
 
     return "", 200
 
