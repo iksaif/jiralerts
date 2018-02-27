@@ -1,23 +1,18 @@
+alert_group_key={{ groupKey | prepareGroupKey }}
 h2. Common information
 
+_Common_Annotations_:
 {% for k, v in commonAnnotations.items() -%}
 * *{{ k }}*: {{ v }}
 {% endfor %}
 
-h2. Active alerts
+_Common_Labels_:
+  {% for k, v in commonLabels.items() -%}
+* {{ k }}: "{{ v }}"
+  {% endfor %}
 
-{% for a in alerts if a.status == 'firing' -%}
-_Annotations_:
-  {% for k, v in a.annotations.items() -%}
-* {{ k }} = {{ v }}
-  {% endfor %}
-_Labels_:
-  {% for k, v in a.labels.items() -%}
-* {{ k }} = {{ v }}
-  {% endfor %}
-[Source|{{ a.generatorURL }}]
-----
+{% set firing_alerts = alerts | selectattr('status', "equalto", 'firing') | list %}
+h2. Active alerts (total : {{ firing_alerts|length }})
+{% for a in firing_alerts -%}
+• {{ a.annotations.description }} ([doc|{{ a.annotations.documentation }}], [src|{{ a.generatorURL }}]){% for k, v in a.labels.items() if k not in commonLabels -%}, {{ k }}:{{ v }}{% endfor %}
 {% endfor %}
-
-
-alert_group_key={{ groupKey | prepareGroupKey }}
