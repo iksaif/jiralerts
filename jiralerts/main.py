@@ -1,31 +1,46 @@
 #!/usr/bin/env python3
 
+import base64
 import os
 import sys
+import logging
 
-import base64
 import click
-from flask import Flask, request, make_response, redirect, url_for
-from jira import JIRA
 import jinja2
 import prometheus_client as prometheus
+import flask
+from jira import JIRA
 
-app = Flask(__name__)
+try:
+    from raven.contrib.flask import Sentry
+except ImportError:
+    Sentry = None
+
+app = flask.Flask(__name__)
 
 jira = None
 
-
+LOG_FORMAT = (
+    '[%(asctime)s] %(levelname)s %(module)s '
+    '[%(filename)s:%(funcName)s:%(lineno)d] (%(thread)d): %(message)s')
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def prepareGroupKey(gk):
+class Error(Exception):
+    """All local errors."""
+    pass
+
+
+def prepare_group_key(gk):
+    """Create a unique key for an alert group."""
     return base64.b64encode(gk.encode())
 
 
-def prepareTags(commonLabels):
+def prepare_tags(common_labels):
+    """Get JIRA tags from alert labels."""
     tags_whitelist = ['severity', 'dc', 'env', 'perimeter', 'team']
     tags = ['alert', ]
-    for k, v in commonLabels.items():
+    for k, v in common_labels.items():
         if k in tags_whitelist:
             tags.append('%s:%s' % (k, v))
         if k == 'tags':
@@ -34,15 +49,15 @@ def prepareTags(commonLabels):
 
 
 JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
-JINJA_ENV.filters['prepareGroupKey'] = prepareGroupKey
+JINJA_ENV.filters['prepareGroupKey'] = prepare_group_key
 
 summary_tmpl = JINJA_ENV.get_template('templates/summary.tmpl')
 description_tmpl = JINJA_ENV.get_template('templates/description.tmpl')
-description_boundary = '_-- Alertmanager -- [only edit above]_'
+DESCRIPTION_BOUNDARY = '_-- Alertmanager -- [only edit above]_'
 
 # Order for the search query is important for the query performance. It relies
 # on the 'alert_group_key' field in the description that must not be modified.
-search_query = 'project = %s and ' + \
+SEARCH_QUERY = 'project = %s and ' + \
                'issuetype = %s and ' + \
                'labels = "alert" and ' + \
                'status not in (%s) and ' + \
@@ -75,10 +90,10 @@ def close(issue, tid):
 
 @jira_request_time_update.time()
 def update_issue(issue, summary, description):
-    custom_desc = issue.fields.description.rsplit(description_boundary, 1)[0]
+    custom_desc = issue.fields.description.rsplit(DESCRIPTION_BOUNDARY, 1)[0]
     return issue.update(
         summary=summary,
-        description="%s\n\n%s\n%s" % (custom_desc.strip(), description_boundary, description))
+        description="%s\n\n%s\n%s" % (custom_desc.strip(), DESCRIPTION_BOUNDARY, description))
 
 
 @jira_request_time_create.time()
@@ -86,7 +101,7 @@ def create_issue(project, issue_type, summary, description, tags):
     return jira.create_issue({
         'project': {'key': project},
         'summary': summary,
-        'description': "%s\n\n%s" % (description_boundary, description),
+        'description': "%s\n\n%s" % (DESCRIPTION_BOUNDARY, description),
         'issuetype': {'name': issue_type},
         'labels': tags,
     })
@@ -104,16 +119,16 @@ def parse_issue_params():
     This endpoint accepts a JSON encoded notification according to the version 3 or 4
     of the generic webhook of the Prometheus Alertmanager.
     """
-    data = request.get_json()
+    data = flask.request.get_json()
     if data['version'] not in ["3", "4"]:
         return "unknown message version %s" % data['version'], 400
 
-    commonLabels = data['commonLabels']
-    if 'issue_type' not in commonLabels or 'project' not in commonLabels:
+    common_labels = data['commonLabels']
+    if 'issue_type' not in common_labels or 'project' not in common_labels:
         return "Required commonLabels not found: issue_type or project", 400
 
-    issue_type = commonLabels['issue_type']
-    project = commonLabels['project']
+    issue_type = common_labels['issue_type']
+    project = common_labels['project']
     return file_issue(project=project, issue_type=issue_type)
 
 
@@ -124,18 +139,20 @@ def file_issue(project, issue_type):
     This endpoint accepts a JSON encoded notification according to the version 3 or 4
     of the generic webhook of the Prometheus Alertmanager.
     """
-    data = request.get_json()
+    app.logger.info("issue: %s %s" % (project, issue_type))
+
+    data = flask.request.get_json()
     if data['version'] not in ["3", "4"]:
         return "unknown message version %s" % data['version'], 400
 
     resolved = data['status'] == "resolved"
-    tags = prepareTags(data['commonLabels'])
+    tags = prepare_tags(data['commonLabels'])
     description = description_tmpl.render(data)
     summary = summary_tmpl.render(data)
 
     # If there's already a ticket for the incident, update it and close if necessary.
-    result = jira.search_issues(search_query % (
-        project, issue_type, ','.join(resolved_status), prepareGroupKey(data['groupKey'])))
+    result = jira.search_issues(SEARCH_QUERY % (
+        project, issue_type, ','.join(resolved_status), prepare_group_key(data['groupKey'])))
     if result:
         issue = result[0]
 
@@ -147,7 +164,7 @@ def file_issue(project, issue_type):
             if valid_trans:
                 close(issue, valid_trans[0]['id'])
             else:
-                print("Unable to find transition to close %s" % issue)
+                app.logger.warning("Unable to find transition to close %s" % issue)
 
         # Update the base information regardless of the transition.
         update_issue(issue, summary, description)
@@ -161,7 +178,7 @@ def file_issue(project, issue_type):
 
 @app.route('/metrics')
 def metrics():
-    resp = make_response(prometheus.generate_latest(prometheus.core.REGISTRY))
+    resp = flask.make_response(prometheus.generate_latest(prometheus.core.REGISTRY))
     resp.headers['Content-Type'] = prometheus.CONTENT_TYPE_LATEST
     return resp, 200
 
@@ -171,14 +188,16 @@ def metrics():
 @click.option('--port', '-p', default=9050, help='Listen port for the webhook')
 @click.option('--res_transitions', default="resolve issue,close issue",
               help='Comma separated list of known transitions used to resolve alerts')
-@click.option('--res_status', default="resolved,closed,fixed,done,complete",
+@click.option('--res_status', default="resolved,closed,done,complete",
               help='Comma separated list of known resolved status')
 @click.option('--debug', '-d', default=False, is_flag=True, help='Enable debug mode')
+@click.option('--loglevel', '-l', default='INFO', help='Log Level, empty string to disable.')
 @click.argument('server')
-def main(host, port, server, res_transitions, res_status, debug):
+def main(host, port, server, res_transitions, res_status, debug, loglevel):
+    # TODO: get rid of globals. Maybe store that inside app. itself.
     global jira
-
     global resolve_transitions, resolved_status
+
     resolve_transitions = res_transitions.split(',')
     resolved_status = res_status.split(',')
 
@@ -188,7 +207,24 @@ def main(host, port, server, res_transitions, res_status, debug):
         print("JIRA_USERNAME or JIRA_PASSWORD not set")
         sys.exit(2)
 
-    jira = JIRA(basic_auth=(username, password), server=server, logging=debug)
+    if loglevel:
+        # Remove existing logger.
+        app.config['LOGGER_HANDLER_POLICY'] = 'never'
+        app.logger.propagate = True
+
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        app.logger.addHandler(handler)
+        app.logger.setLevel(logging.getLevelName(loglevel))
+        app.logger.info("Logging initialized.")
+
+    dsn = os.getenv('SENTRY_DSN', None)
+    if dsn and Sentry:
+        sentry = Sentry(dsn=dsn)
+        sentry.init_app(app)
+        app.logger.info("Sentry is enabled.")
+
+    jira = JIRA(basic_auth=(username, password), server=server, logging=True)
     app.run(host=host, port=port, debug=debug)
 
 
