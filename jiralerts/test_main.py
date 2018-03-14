@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import pytest
 import unittest
 
 from jiralerts import main
@@ -40,9 +39,9 @@ WEBHOOK_PAYLOAD = {
 
 class TestJiralerts(unittest.TestCase):
     def test(self):
-        pass
+        self.assertNotEqual(main.app, None)
 
-        # TODO write tests with a JIRA mock.
+    # TODO write tests with a JIRA mock.
 
 
 if __name__ == '__main__':

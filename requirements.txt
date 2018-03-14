@@ -1,7 +1,8 @@
 uWSGI
 Click
 Flask
-Jira>=1.0.14
+# Fix jira version until https://github.com/pycontribs/jira/issues/501 is fixed.
+Jira==1.0.10
 prometheus_client
 
 blinker

@@ -107,6 +107,11 @@ def create_issue(project, issue_type, summary, description, tags):
     })
 
 
+@app.route('/')
+def index():
+    return 'jiralert. <a href="/metrics">metrics</a>'
+
+
 @app.route('/-/health')
 def health():
     return "OK", 200

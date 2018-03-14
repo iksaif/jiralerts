@@ -23,7 +23,7 @@ _TEST_REQUIRE = [l for l in _TESTS_REQUIREMENTS_TXT if "://" not in l]
 
 setuptools.setup(
     name='jiralerts',
-    version='0.1-criteo-1',
+    version='0.2',
     include_package_data=True,
     install_requires=_INSTALL_REQUIRES,
     dependency_links=_DEPENDENCY_LINKS,
