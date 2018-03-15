@@ -1,8 +1,7 @@
 uWSGI
 Click
 Flask
-# Fix jira version until https://github.com/pycontribs/jira/issues/501 is fixed.
-Jira==1.0.10
+Jira
 prometheus_client
 
 # For exception handling.
@@ -11,3 +10,4 @@ raven
 
 # To get a real wsgi container.
 flask-twisted
+twisted
