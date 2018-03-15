@@ -31,6 +31,7 @@ setuptools.setup(
     entry_points={
         'console_scripts': [
             'jiralerts = jiralerts.main:main',
+            'jiralerts-twisted = jiralerts.twisted:main',
         ],
     },
     packages=setuptools.find_packages())

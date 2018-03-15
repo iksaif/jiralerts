@@ -5,5 +5,9 @@ Flask
 Jira==1.0.10
 prometheus_client
 
+# For exception handling.
 blinker
 raven
+
+# To get a real wsgi container.
+flask-twisted

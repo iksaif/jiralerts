@@ -112,6 +112,15 @@ def index():
     return 'jiralert. <a href="/metrics">metrics</a>'
 
 
+@app.route('/favicon.ico')
+def favicon():
+    return flask.send_from_directory(
+        ROOT_DIR,
+        'favicon.ico',
+        mimetype='image/vnd.microsoft.icon'
+    )
+
+
 @app.route('/-/health')
 def health():
     return "OK", 200
@@ -188,17 +197,7 @@ def metrics():
     return resp, 200
 
 
-@click.command()
-@click.option('--host', help='Host listen address')
-@click.option('--port', '-p', default=9050, help='Listen port for the webhook')
-@click.option('--res_transitions', default="resolve issue,close issue",
-              help='Comma separated list of known transitions used to resolve alerts')
-@click.option('--res_status', default="resolved,closed,done,complete",
-              help='Comma separated list of known resolved status')
-@click.option('--debug', '-d', default=False, is_flag=True, help='Enable debug mode')
-@click.option('--loglevel', '-l', default='INFO', help='Log Level, empty string to disable.')
-@click.argument('server')
-def main(host, port, server, res_transitions, res_status, debug, loglevel):
+def setup_app(server, res_transitions, res_status, debug, loglevel):
     # TODO: get rid of globals. Maybe store that inside app. itself.
     global jira
     global resolve_transitions, resolved_status
@@ -229,8 +228,50 @@ def main(host, port, server, res_transitions, res_status, debug, loglevel):
         sentry.init_app(app)
         app.logger.info("Sentry is enabled.")
 
+    app.logger.info("Connecting to JIRA.""")
     jira = JIRA(basic_auth=(username, password), server=server, logging=True)
-    app.run(host=host, port=port, debug=debug)
+    return app
+
+
+def run_with_werkzeug(host, port, debug, app, threads):
+    """Run with werkzeug simple wsgi container."""
+    threaded = threads is not None and (threads > 0)
+    app.run(host=host, port=port, debug=debug, threaded=threaded)
+
+
+def run_with_twisted(host, port, debug, app, threads, loglevel):
+    """Run with twisted."""
+    from twisted.internet import reactor
+    from twisted.python import log
+    import flask_twisted
+
+    twisted = flask_twisted.Twisted(app)
+    if threads:
+        reactor.suggestThreadPoolSize(threads)
+    if loglevel:
+        log.startLogging(sys.stderr)
+    twisted.run(host=host, port=port, debug=debug)
+
+
+@click.command()
+@click.option('--host', help='Host listen address')
+@click.option('--port', '-p', default=9050, help='Listen port for the webhook', type=int)
+@click.option('--res_transitions', default="resolve issue,close issue",
+              help='Comma separated list of known transitions used to resolve alerts')
+@click.option('--res_status', default="resolved,closed,done,complete",
+              help='Comma separated list of known resolved status')
+@click.option('--debug', '-d', default=False, is_flag=True, help='Enable debug mode')
+@click.option('--loglevel', '-l', default='INFO', help='Log Level, empty string to disable.')
+@click.option('--twisted', default=False, is_flag=True, help='Use twisted to server requests.')
+@click.option('--threads', default=None, help='Number of threads to use.', type=int)
+@click.argument('server')
+def main(host, port, server, res_transitions, res_status, debug,
+         loglevel, twisted, threads):
+    setup_app(server, res_transitions, res_status, debug, loglevel)
+    if not twisted:
+        run_with_werkzeug(host, port, debug, app, threads)
+    else:
+        run_with_twisted(host, port, debug, app, threads, loglevel)
 
 
 if __name__ == "__main__":
