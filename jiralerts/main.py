@@ -33,7 +33,7 @@ class Error(Exception):
 
 def prepare_group_key(gk):
     """Create a unique key for an alert group."""
-    return base64.b64encode(gk.encode())
+    return base64.b64encode(gk.encode()).decode()
 
 
 def prepare_tags(common_labels):
