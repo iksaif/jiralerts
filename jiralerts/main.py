@@ -5,6 +5,7 @@ import os
 import sys
 import logging
 
+import hashlib
 import click
 import jinja2
 import prometheus_client as prometheus
@@ -36,9 +37,15 @@ def prepare_group_key(gk):
     return base64.b64encode(gk.encode()).decode()
 
 
+def prepare_group_label_key(gk):
+    """Create a unique key by hashing an alert group."""
+    hash_label = hashlib.sha1(gk.encode()).hexdigest()
+    return hash_label[0:10]
+
+
 def prepare_tags(common_labels):
     """Get JIRA tags from alert labels."""
-    tags_whitelist = ['severity', 'dc', 'env', 'perimeter', 'team']
+    tags_whitelist = ['severity', 'dc', 'env', 'perimeter', 'team', 'jiralert']
     tags = ['alert', ]
     for k, v in common_labels.items():
         if k in tags_whitelist:
@@ -61,7 +68,8 @@ SEARCH_QUERY = 'project = %s and ' + \
                'issuetype = %s and ' + \
                'labels = "alert" and ' + \
                'status not in (%s) and ' + \
-               'description ~ "alert_group_key=%s"'
+               '(description ~ "alert_group_key=%s" or ' + \
+               'labels = "jiralert:%s")'
 
 jira_request_time = prometheus.Histogram('jira_request_latency_seconds',
                                          'Latency when querying the JIRA API',
@@ -75,7 +83,8 @@ request_time = prometheus.Histogram('request_latency_seconds',
                                     'Latency of incoming requests',
                                     ['endpoint'])
 request_time_generic_issues = request_time.labels(endpoint='/issues')
-request_time_qualified_issues = request_time.labels(endpoint='/issues/<project>/<issue_type>')
+request_time_qualified_issues = request_time.labels(
+    endpoint='/issues/<project>/<issue_type>')
 
 
 @jira_request_time_transitions.time()
@@ -89,10 +98,15 @@ def close(issue, tid):
 
 
 @jira_request_time_update.time()
-def update_issue(issue, summary, description):
+def update_issue(issue, summary, description, tags):
     custom_desc = issue.fields.description.rsplit(DESCRIPTION_BOUNDARY, 1)[0]
+
+    # Merge expected tags and existing ones
+    fields = {"labels": list(set(issue.fields.labels + tags))}
+
     return issue.update(
         summary=summary,
+        fields=fields,
         description="%s\n\n%s\n%s" % (custom_desc.strip(), DESCRIPTION_BOUNDARY, description))
 
 
@@ -161,12 +175,16 @@ def file_issue(project, issue_type):
 
     resolved = data['status'] == "resolved"
     tags = prepare_tags(data['commonLabels'])
+    tags.append('jiralert:%s' % prepare_group_label_key(data['groupKey']))
+
     description = description_tmpl.render(data)
     summary = summary_tmpl.render(data)
 
     # If there's already a ticket for the incident, update it and close if necessary.
     result = jira.search_issues(SEARCH_QUERY % (
-        project, issue_type, ','.join(resolved_status), prepare_group_key(data['groupKey'])))
+        project, issue_type, ','.join(resolved_status),
+        prepare_group_key(data['groupKey']),
+        prepare_group_label_key(data['groupKey'])))
     if result:
         issue = result[0]
 
@@ -178,10 +196,11 @@ def file_issue(project, issue_type):
             if valid_trans:
                 close(issue, valid_trans[0]['id'])
             else:
-                app.logger.warning("Unable to find transition to close %s" % issue)
+                app.logger.warning(
+                    "Unable to find transition to close %s" % issue)
 
         # Update the base information regardless of the transition.
-        update_issue(issue, summary, description)
+        update_issue(issue, summary, description, tags)
 
     # Do not create an issue for resolved incidents that were never filed.
     elif not resolved:
@@ -192,7 +211,8 @@ def file_issue(project, issue_type):
 
 @app.route('/metrics')
 def metrics():
-    resp = flask.make_response(prometheus.generate_latest(prometheus.core.REGISTRY))
+    resp = flask.make_response(
+        prometheus.generate_latest(prometheus.core.REGISTRY))
     resp.headers['Content-Type'] = prometheus.CONTENT_TYPE_LATEST
     return resp, 200
 

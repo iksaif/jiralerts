@@ -1,4 +1,3 @@
-alert_group_key={{ groupKey | prepareGroupKey }}
 h2. Common information
 
 _Common_Annotations_:
@@ -14,5 +13,5 @@ _Common_Labels_:
 {% set firing_alerts = alerts | selectattr('status', "equalto", 'firing') | list %}
 h2. Active alerts (total : {{ firing_alerts|length }})
 {% for a in firing_alerts -%}
-• {{ a.annotations.description }} ([doc|{{ a.annotations.documentation }}], [src|{{ a.generatorURL }}]){% for k, v in a.labels.items() if k not in commonLabels -%}, {{ k }}:{{ v }}{% endfor %}
+• {{ a.annotations.description }} ([documentation|{{ a.annotations.documentation }}], [source|{{ a.generatorURL }}]){% for k, v in a.labels.items() if k not in commonLabels -%}, {{ k }}:{{ v }}{% endfor %}
 {% endfor %}
