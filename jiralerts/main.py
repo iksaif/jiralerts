@@ -64,8 +64,8 @@ DESCRIPTION_BOUNDARY = '_-- Alertmanager -- [only edit above]_'
 
 # Order for the search query is important for the query performance. It relies
 # on the 'alert_group_key' field in the description that must not be modified.
-SEARCH_QUERY = 'project = %s and ' + \
-               'issuetype = %s and ' + \
+SEARCH_QUERY = 'project = "%s" and ' + \
+               'issuetype = "%s" and ' + \
                'labels = "alert" and ' + \
                'status not in (%s) and ' + \
                '(description ~ "alert_group_key=%s" or ' + \
