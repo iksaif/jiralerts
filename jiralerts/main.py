@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 
+
 import base64
+import click
+import flask
+import hashlib
+import jinja2
+import logging
 import os
 import sys
-import logging
 
-import hashlib
-import click
-import jinja2
+import pkg_resources
+
 import prometheus_client as prometheus
-import flask
+from prometheus_flask_exporter import PrometheusMetrics
 from jira import JIRA
 
 try:
@@ -18,6 +22,15 @@ except ImportError:
     Sentry = None
 
 app = flask.Flask(__name__)
+metrics = PrometheusMetrics(app)
+
+
+try:
+    version = pkg_resources.require("jiralerts")[0].version
+except pkg_resources.DistributionNotFound:
+    version = 'unknown'
+metrics.info('app_info', 'Application info', version=version)
+
 
 jira = None
 
@@ -123,7 +136,8 @@ def create_issue(project, issue_type, summary, description, tags):
 
 @app.route('/')
 def index():
-    return 'jiralert. <a href="/metrics">metrics</a>'
+    return 'jiralert %s: %s<br/> <a href="/metrics">metrics</a>' % (
+        version, jira.client_info())
 
 
 @app.route('/favicon.ico')

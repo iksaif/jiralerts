@@ -3,6 +3,7 @@ Click
 Flask
 Jira
 prometheus_client
+prometheus-flask-exporter
 
 # For exception handling.
 blinker
