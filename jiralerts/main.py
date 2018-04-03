@@ -163,10 +163,12 @@ def parse_issue_params():
     """
     data = flask.request.get_json()
     if data['version'] not in ["3", "4"]:
+        app.logger.error("/issue, unknown message version: %s" % data['version'])
         return "unknown message version %s" % data['version'], 400
 
     common_labels = data['commonLabels']
     if 'issue_type' not in common_labels or 'project' not in common_labels:
+        app.logger.error("/issue, required commonLabels not found: issue_type or project")
         return "Required commonLabels not found: issue_type or project", 400
 
     issue_type = common_labels['issue_type']
@@ -185,6 +187,8 @@ def file_issue(project, issue_type):
 
     data = flask.request.get_json()
     if data['version'] not in ["3", "4"]:
+        app.logger.error("issue (%s, %s), unknown message version: %s" % (
+            project, issue_type, data['version']))
         return "unknown message version %s" % data['version'], 400
 
     resolved = data['status'] == "resolved"
@@ -201,6 +205,8 @@ def file_issue(project, issue_type):
         prepare_group_label_key(data['groupKey'])))
     if result:
         issue = result[0]
+        app.logger.debug("issue (%s, %s), jira issue found: %s" % (
+            project, issue_type, issue.key))
 
         # Try different possible transitions for resolved incidents
         # in order of preference. Different ones may work for different boards.
@@ -215,10 +221,13 @@ def file_issue(project, issue_type):
 
         # Update the base information regardless of the transition.
         update_issue(issue, summary, description, tags)
+        app.logger.debug("issue (%s, %s), %s updated" % (project, issue_type, issue.key))
 
     # Do not create an issue for resolved incidents that were never filed.
     elif not resolved:
-        create_issue(project, issue_type, summary, description, tags)
+        issue = create_issue(project, issue_type, summary, description, tags)
+        app.logger.debug("issue (%s, %s), new issue created (%s)" % (
+            project, issue_type, issue.key))
 
     return "", 200
 
