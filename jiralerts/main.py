@@ -2,35 +2,32 @@
 
 
 import base64
-import click
+import argparse
 import flask
 import hashlib
 import jinja2
-import logging
 import os
 import sys
 
-import pkg_resources
+from gourde import Gourde
 
 import prometheus_client as prometheus
-from prometheus_flask_exporter import PrometheusMetrics
 from jira import JIRA
 
-try:
-    from raven.contrib.flask import Sentry
-except ImportError:
-    Sentry = None
-
 app = flask.Flask(__name__)
-metrics = PrometheusMetrics(app)
 
 
-try:
-    version = pkg_resources.require("jiralerts")[0].version
-except pkg_resources.DistributionNotFound:
-    version = 'unknown'
-metrics.info('app_info', 'Application info', version=version)
+# Add our own index.
+@app.route('/')
+def index():
+    return 'jiralert: %s<br/> <a href="/metrics">metrics</a>' % (
+        jira.client_info()
+    )
 
+
+gourde = Gourde(app)
+app = gourde.app  # This is a flask.Flask() app.
+metrics = gourde.metrics
 
 jira = None
 
@@ -71,18 +68,18 @@ def prepare_tags(common_labels):
 JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
 JINJA_ENV.filters['prepareGroupKey'] = prepare_group_key
 
-summary_tmpl = JINJA_ENV.get_template('templates/summary.tmpl')
-description_tmpl = JINJA_ENV.get_template('templates/description.tmpl')
+SUMMARY_TMPL = JINJA_ENV.get_template('templates/summary.tmpl')
+DESCRIPTION_TMPL = JINJA_ENV.get_template('templates/description.tmpl')
 DESCRIPTION_BOUNDARY = '_-- Alertmanager -- [only edit above]_'
 
 # Order for the search query is important for the query performance. It relies
 # on the 'alert_group_key' field in the description that must not be modified.
-SEARCH_QUERY = 'project = "%s" and ' + \
-               'issuetype = "%s" and ' + \
+SEARCH_QUERY = 'project = "{project}" and ' + \
+               'issuetype = "{issuetype}" and ' + \
                'labels = "alert" and ' + \
-               'status not in (%s) and ' + \
-               '(description ~ "alert_group_key=%s" or ' + \
-               'labels = "jiralert:%s")'
+               'status not in ({status}) and ' + \
+               '(description ~ "alert_group_key={group_key}" or ' + \
+               'labels = "jiralert:{group_label_key}")'
 
 jira_request_time = prometheus.Histogram('jira_request_latency_seconds',
                                          'Latency when querying the JIRA API',
@@ -134,26 +131,6 @@ def create_issue(project, issue_type, summary, description, tags):
     })
 
 
-@app.route('/')
-def index():
-    return 'jiralert %s: %s<br/> <a href="/metrics">metrics</a>' % (
-        version, jira.client_info())
-
-
-@app.route('/favicon.ico')
-def favicon():
-    return flask.send_from_directory(
-        ROOT_DIR,
-        'favicon.ico',
-        mimetype='image/vnd.microsoft.icon'
-    )
-
-
-@app.route('/-/health')
-def health():
-    return "OK", 200
-
-
 @request_time_generic_issues.time()
 @app.route('/issues', methods=['POST'])
 def parse_issue_params():
@@ -176,6 +153,27 @@ def parse_issue_params():
     return file_issue(project=project, issue_type=issue_type)
 
 
+def update_or_resolve_issue(project, issue_type, issue, resolved, summary, description, tags):
+    """Update and maybe resolve an issue."""
+    app.logger.debug("issue (%s, %s), jira issue found: %s" % (
+        project, issue_type, issue.key))
+
+    # Try different possible transitions for resolved incidents
+    # in order of preference. Different ones may work for different boards.
+    if resolved:
+        valid_trans = [
+            t for t in transitions(issue) if t['name'].lower() in resolve_transitions]
+        if valid_trans:
+            close(issue, valid_trans[0]['id'])
+        else:
+            app.logger.warning(
+                "Unable to find transition to close %s" % issue)
+
+    # Update the base information regardless of the transition.
+    update_issue(issue, summary, description, tags)
+    app.logger.debug("issue (%s, %s), %s updated" % (project, issue_type, issue.key))
+
+
 @request_time_qualified_issues.time()
 @app.route('/issues/<project>/<issue_type>', methods=['POST'])
 def file_issue(project, issue_type):
@@ -195,52 +193,35 @@ def file_issue(project, issue_type):
     tags = prepare_tags(data['commonLabels'])
     tags.append('jiralert:%s' % prepare_group_label_key(data['groupKey']))
 
-    description = description_tmpl.render(data)
-    summary = summary_tmpl.render(data)
+    description = DESCRIPTION_TMPL.render(data)
+    summary = SUMMARY_TMPL.render(data)
 
     # If there's already a ticket for the incident, update it and close if necessary.
-    result = jira.search_issues(SEARCH_QUERY % (
-        project, issue_type, ','.join(resolved_status),
-        prepare_group_key(data['groupKey']),
-        prepare_group_label_key(data['groupKey'])))
-    if result:
-        issue = result[0]
-        app.logger.debug("issue (%s, %s), jira issue found: %s" % (
-            project, issue_type, issue.key))
+    query = SEARCH_QUERY.format(
+        project=project,
+        issuetype=issue_type,
+        status=','.join(resolved_status),
+        group_key=prepare_group_key(data['groupKey']),
+        group_label_key=prepare_group_label_key(data['groupKey'])
+    )
+    app.logger.debug(query)
+    result = jira.search_issues(query) or []
+    # sort issue by key to have them in order of creation.
+    sorted(result, key=lambda i: i.key)
 
-        # Try different possible transitions for resolved incidents
-        # in order of preference. Different ones may work for different boards.
-        if resolved:
-            valid_trans = [
-                t for t in transitions(issue) if t['name'].lower() in resolve_transitions]
-            if valid_trans:
-                close(issue, valid_trans[0]['id'])
-            else:
-                app.logger.warning(
-                    "Unable to find transition to close %s" % issue)
-
-        # Update the base information regardless of the transition.
-        update_issue(issue, summary, description, tags)
-        app.logger.debug("issue (%s, %s), %s updated" % (project, issue_type, issue.key))
-
-    # Do not create an issue for resolved incidents that were never filed.
-    elif not resolved:
-        issue = create_issue(project, issue_type, summary, description, tags)
-        app.logger.debug("issue (%s, %s), new issue created (%s)" % (
-            project, issue_type, issue.key))
+    for issue in result:
+        update_or_resolve_issue(project, issue_type, issue, resolved, summary, description, tags)
+    else:
+        # Do not create an issue for resolved incidents that were never filed.
+        if not resolved:
+            issue = create_issue(project, issue_type, summary, description, tags)
+            app.logger.debug("issue (%s, %s), new issue created (%s)" % (
+                project, issue_type, issue.key))
 
     return "", 200
 
 
-@app.route('/metrics')
-def metrics():
-    resp = flask.make_response(
-        prometheus.generate_latest(prometheus.core.REGISTRY))
-    resp.headers['Content-Type'] = prometheus.CONTENT_TYPE_LATEST
-    return resp, 200
-
-
-def setup_app(server, res_transitions, res_status, debug, loglevel):
+def setup_app(server, res_transitions, res_status):
     # TODO: get rid of globals. Maybe store that inside app. itself.
     global jira
     global resolve_transitions, resolved_status
@@ -254,67 +235,31 @@ def setup_app(server, res_transitions, res_status, debug, loglevel):
         print("JIRA_USERNAME or JIRA_PASSWORD not set")
         sys.exit(2)
 
-    if loglevel:
-        # Remove existing logger.
-        app.config['LOGGER_HANDLER_POLICY'] = 'never'
-        app.logger.propagate = True
-
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter(LOG_FORMAT))
-        app.logger.addHandler(handler)
-        app.logger.setLevel(logging.getLevelName(loglevel))
-        app.logger.info("Logging initialized.")
-
-    dsn = os.getenv('SENTRY_DSN', None)
-    if dsn and Sentry:
-        sentry = Sentry(dsn=dsn)
-        sentry.init_app(app)
-        app.logger.info("Sentry is enabled.")
-
     app.logger.info("Connecting to JIRA.""")
     jira = JIRA(basic_auth=(username, password), server=server, logging=True)
     return app
 
 
-def run_with_werkzeug(host, port, debug, app, threads):
-    """Run with werkzeug simple wsgi container."""
-    threaded = threads is not None and (threads > 0)
-    app.run(host=host, port=port, debug=debug, threaded=threaded)
+def main():
+    # Setup a custom parser.
+    parser = argparse.ArgumentParser(description='jiralert')
+    parser = Gourde.get_argparser(parser)
+    # Backward compatibility.
+    parser.add_argument(
+        '--loglevel', default='INFO', help='Log Level, empty string to disable.'
+    )
+    parser.add_argument('--res_transitions', default="resolve issue,close issue",
+                        help='Comma separated list of known transitions used to resolve alerts')
+    parser.add_argument('--res_status', default="resolved,closed,done,complete",
+                        help='Comma separated list of known resolved status')
+    parser.add_argument('server')
+    args = parser.parse_args()
+    args.log_level = args.loglevel
 
-
-def run_with_twisted(host, port, debug, app, threads, loglevel):
-    """Run with twisted."""
-    from twisted.internet import reactor
-    from twisted.python import log
-    import flask_twisted
-
-    twisted = flask_twisted.Twisted(app)
-    if threads:
-        reactor.suggestThreadPoolSize(threads)
-    if loglevel:
-        log.startLogging(sys.stderr)
-    twisted.run(host=host, port=port, debug=debug)
-
-
-@click.command()
-@click.option('--host', help='Host listen address')
-@click.option('--port', '-p', default=9050, help='Listen port for the webhook', type=int)
-@click.option('--res_transitions', default="resolve issue,close issue",
-              help='Comma separated list of known transitions used to resolve alerts')
-@click.option('--res_status', default="resolved,closed,done,complete",
-              help='Comma separated list of known resolved status')
-@click.option('--debug', '-d', default=False, is_flag=True, help='Enable debug mode')
-@click.option('--loglevel', '-l', default='INFO', help='Log Level, empty string to disable.')
-@click.option('--twisted', default=False, is_flag=True, help='Use twisted to server requests.')
-@click.option('--threads', default=None, help='Number of threads to use.', type=int)
-@click.argument('server')
-def main(host, port, server, res_transitions, res_status, debug,
-         loglevel, twisted, threads):
-    setup_app(server, res_transitions, res_status, debug, loglevel)
-    if not twisted:
-        run_with_werkzeug(host, port, debug, app, threads)
-    else:
-        run_with_twisted(host, port, debug, app, threads, loglevel)
+    setup_app(args.server, args.res_transitions, args.res_status)
+    # Setup gourde with the args.
+    gourde.setup(args)
+    gourde.run()
 
 
 if __name__ == "__main__":

@@ -1,9 +1,5 @@
-uWSGI
-Click
-Flask
+gourde
 Jira
-prometheus_client
-prometheus-flask-exporter
 
 # For exception handling.
 blinker
