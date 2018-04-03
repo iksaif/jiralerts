@@ -131,6 +131,12 @@ def create_issue(project, issue_type, summary, description, tags):
     })
 
 
+@app.route('/-/health', endpoint='health2')
+def health():
+    # Backward compatibility.
+    return gourde.healthy()
+
+
 @request_time_generic_issues.time()
 @app.route('/issues', methods=['POST'])
 def parse_issue_params():
