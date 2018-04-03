@@ -10,9 +10,9 @@ import os
 import sys
 
 from gourde import Gourde
-
 import prometheus_client as prometheus
 from jira import JIRA
+
 
 app = flask.Flask(__name__)
 
@@ -211,7 +211,7 @@ def file_issue(project, issue_type):
 
     for issue in result:
         update_or_resolve_issue(project, issue_type, issue, resolved, summary, description, tags)
-    else:
+    if not result:
         # Do not create an issue for resolved incidents that were never filed.
         if not resolved:
             issue = create_issue(project, issue_type, summary, description, tags)
@@ -222,6 +222,7 @@ def file_issue(project, issue_type):
 
 
 def setup_app(server, res_transitions, res_status):
+    """Setup the app itself."""
     # TODO: get rid of globals. Maybe store that inside app. itself.
     global jira
     global resolve_transitions, resolved_status
@@ -240,6 +241,11 @@ def setup_app(server, res_transitions, res_status):
     return app
 
 
+def setup(args):
+    """Setup everything."""
+    setup_app(args.server, args.res_transitions, args.res_status)
+
+
 def main():
     # Setup a custom parser.
     parser = argparse.ArgumentParser(description='jiralert')
@@ -248,17 +254,28 @@ def main():
     parser.add_argument(
         '--loglevel', default='INFO', help='Log Level, empty string to disable.'
     )
-    parser.add_argument('--res_transitions', default="resolve issue,close issue",
-                        help='Comma separated list of known transitions used to resolve alerts')
-    parser.add_argument('--res_status', default="resolved,closed,done,complete",
-                        help='Comma separated list of known resolved status')
+    parser.add_argument(
+        '--res_transitions', default="resolve issue,close issue",
+        help='Comma separated list of known transitions used to resolve alerts'
+    )
+    parser.add_argument(
+        '--res_status', default="resolved,closed,done,complete",
+        help='Comma separated list of known resolved status'
+    )
     parser.add_argument('server')
     args = parser.parse_args()
     args.log_level = args.loglevel
 
-    setup_app(args.server, args.res_transitions, args.res_status)
+    if args.twisted:
+        from twisted.internet import reactor
+        reactor.callInThread(setup, args)
+    else:
+        setup(args)
+
     # Setup gourde with the args.
     gourde.setup(args)
+    gourde.is_healthy = lambda: jira is not None and bool(jira.client_info())
+    gourde.is_ready = lambda: jira is not None
     gourde.run()
 
 
