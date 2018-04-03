@@ -242,8 +242,9 @@ def setup_app(server, res_transitions, res_status):
         print("JIRA_USERNAME or JIRA_PASSWORD not set")
         sys.exit(2)
 
-    app.logger.info("Connecting to JIRA.""")
+    app.logger.info("Connecting to JIRA...""")
     jira = JIRA(basic_auth=(username, password), server=server, logging=True)
+    app.logger.info("Connected to JIRA.""")
     return app
 
 
