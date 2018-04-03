@@ -221,7 +221,7 @@ def file_issue(project, issue_type):
         # Do not create an issue for resolved incidents that were never filed.
         if not resolved:
             issue = create_issue(project, issue_type, summary, description, tags)
-            app.logger.debug("issue (%s, %s), new issue created (%s)" % (
+            app.logger.info("issue (%s, %s), new issue created (%s)" % (
                 project, issue_type, issue.key))
 
     return "", 200
