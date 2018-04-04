@@ -81,6 +81,15 @@ SEARCH_QUERY = 'project = "{project}" and ' + \
                '(description ~ "alert_group_key={group_key}" or ' + \
                'labels = "jiralert:{group_label_key}")'
 
+errors = prometheus.Counter('errors_total', 'Number of errors')
+jira_errors = prometheus.Counter('jira_errors_total',
+                                 'Number of jira errors',
+                                 ['action'])
+jira_errors_transitions = jira_errors.labels(action='transitions')
+jira_errors_close = jira_errors.labels(action='close')
+jira_errors_update = jira_errors.labels(action='update')
+jira_errors_create = jira_errors.labels(action='create')
+
 jira_request_time = prometheus.Histogram('jira_request_latency_seconds',
                                          'Latency when querying the JIRA API',
                                          ['action'])
@@ -97,16 +106,19 @@ request_time_qualified_issues = request_time.labels(
     endpoint='/issues/<project>/<issue_type>')
 
 
+@jira_errors_transitions.count_exceptions()
 @jira_request_time_transitions.time()
 def transitions(issue):
     return jira.transitions(issue)
 
 
+@jira_errors_close.count_exceptions()
 @jira_request_time_close.time()
 def close(issue, tid):
     return jira.transition_issue(issue, tid)
 
 
+@jira_errors_update.count_exceptions()
 @jira_request_time_update.time()
 def update_issue(issue, summary, description, tags):
     custom_desc = issue.fields.description.rsplit(DESCRIPTION_BOUNDARY, 1)[0]
@@ -120,6 +132,7 @@ def update_issue(issue, summary, description, tags):
         description="%s\n\n%s\n%s" % (custom_desc.strip(), DESCRIPTION_BOUNDARY, description))
 
 
+@jira_errors_create.count_exceptions()
 @jira_request_time_create.time()
 def create_issue(project, issue_type, summary, description, tags):
     return jira.create_issue({
@@ -156,7 +169,7 @@ def parse_issue_params():
 
     issue_type = common_labels['issue_type']
     project = common_labels['project']
-    return file_issue(project=project, issue_type=issue_type)
+    return do_file_issue(project, issue_type, flask.request)
 
 
 def update_or_resolve_issue(project, issue_type, issue, resolved, summary, description, tags):
@@ -187,13 +200,31 @@ def file_issue(project, issue_type):
     This endpoint accepts a JSON encoded notification according to the version 3 or 4
     of the generic webhook of the Prometheus Alertmanager.
     """
-    app.logger.info("issue: %s %s" % (project, issue_type))
+    return do_file_issue(project, issue_type, flask.request)
 
-    data = flask.request.get_json()
+
+def do_file_issue(project, issue_type, request):
+    if not gourde.is_ready():
+        return "Not ready yet", 503
+
+    data = request.get_json()
     if data['version'] not in ["3", "4"]:
         app.logger.error("issue (%s, %s), unknown message version: %s" % (
             project, issue_type, data['version']))
         return "unknown message version %s" % data['version'], 400
+
+    if gourde.args.async:
+        from twisted.internet import reactor
+        reactor.callInThread(do_file_issue_sync, project, issue_type, data)
+        return "OK (async)", 200
+    else:
+        do_file_issue_sync(project, issue_type, data)
+        return "OK", 200
+
+
+@errors.count_exceptions()
+def do_file_issue_sync(project, issue_type, data):
+    app.logger.info("issue: %s %s" % (project, issue_type))
 
     resolved = data['status'] == "resolved"
     tags = prepare_tags(data['commonLabels'])
@@ -223,8 +254,6 @@ def file_issue(project, issue_type):
             issue = create_issue(project, issue_type, summary, description, tags)
             app.logger.info("issue (%s, %s), new issue created (%s)" % (
                 project, issue_type, issue.key))
-
-    return "", 200
 
 
 def setup_app(server, res_transitions, res_status):
@@ -269,9 +298,16 @@ def main():
         '--res_status', default="resolved,closed,done,complete",
         help='Comma separated list of known resolved status'
     )
+    parser.add_argument(
+        '--async', default=False,
+        action="store_true",
+        help="Execute actions asynchronously (useful when jira takes more than 10s)."
+    )
     parser.add_argument('server')
     args = parser.parse_args()
     args.log_level = args.loglevel
+    if args.async:
+        assert args.twisted, "--async only works with --twisted"
 
     if args.twisted:
         from twisted.internet import reactor
@@ -281,6 +317,8 @@ def main():
 
     # Setup gourde with the args.
     gourde.setup(args)
+    # TODO: integrate with app.config: http://flask.pocoo.org/docs/0.12/config/
+    gourde.args = args
     gourde.is_healthy = lambda: jira is not None and bool(jira.client_info())
     gourde.is_ready = lambda: jira is not None
     gourde.run()
