@@ -181,7 +181,7 @@ def update_or_resolve_issue(project, issue_type, issue, resolved, summary, descr
 
     # Update the base information regardless of the transition.
     update_issue(issue, summary, description, tags)
-    app.logger.debug("issue (%s, %s), %s updated" % (project, issue_type, issue.key))
+    app.logger.info("issue (%s, %s), %s updated" % (project, issue_type, issue.key))
 
 
 @request_time_qualified_issues.time()
@@ -205,8 +205,9 @@ def do_file_issue(project, issue_type, request):
         return "unknown message version %s" % data['version'], 400
 
     if gourde.args.async:
-        from twisted.internet import reactor
-        reactor.callInThread(do_file_issue_sync, project, issue_type, data)
+        # We want a separate thread pool here to avoid blocking incoming
+        # requests.
+        gourde.async_threadpool.callInThread(do_file_issue_sync, project, issue_type, data)
         return "OK (async)", 200
     else:
         do_file_issue_sync(project, issue_type, data)
@@ -270,6 +271,18 @@ def setup_app(server, res_transitions, res_status):
 def setup(args):
     """Setup everything."""
     setup_app(args.server, args.res_transitions, args.res_status)
+    if args.async:
+        assert args.twisted, "--async only works with --twisted"
+        from twisted.internet import reactor
+        from twisted.python.threadpool import ThreadPool
+        # Create a dedicated thread-pool for processing JIRA requests.
+        # this means that we *could* loose work. But since alerts are
+        # supposed to be re-sent by alertmanager that's not super bad.
+        # Also, the process will quit only once the queue is empty.
+        threadpool = ThreadPool(maxthreads=5, name="jira")
+        threadpool.start()
+        gourde.async_threadpool = threadpool
+        reactor.addSystemEventTrigger('before', 'shutdown', threadpool.stop)
 
 
 def main():
@@ -296,8 +309,6 @@ def main():
     parser.add_argument('server')
     args = parser.parse_args()
     args.log_level = args.loglevel
-    if args.async:
-        assert args.twisted, "--async only works with --twisted"
 
     if args.twisted:
         from twisted.internet import reactor
