@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-
-import base64
 import argparse
 import flask
 import hashlib
@@ -42,11 +40,6 @@ class Error(Exception):
     pass
 
 
-def prepare_group_key(gk):
-    """Create a unique key for an alert group."""
-    return base64.b64encode(gk.encode()).decode()
-
-
 def prepare_group_label_key(gk):
     """Create a unique key by hashing an alert group."""
     hash_label = hashlib.sha1(gk.encode()).hexdigest()
@@ -66,7 +59,6 @@ def prepare_tags(common_labels):
 
 
 JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
-JINJA_ENV.filters['prepareGroupKey'] = prepare_group_key
 
 SUMMARY_TMPL = JINJA_ENV.get_template('templates/summary.template')
 DESCRIPTION_TMPL = JINJA_ENV.get_template('templates/description.template')
@@ -78,8 +70,7 @@ SEARCH_QUERY = 'project = "{project}" and ' + \
                'issuetype = "{issuetype}" and ' + \
                'labels = "alert" and ' + \
                'status not in ({status}) and ' + \
-               '(description ~ "alert_group_key={group_key}" or ' + \
-               'labels = "jiralert:{group_label_key}")'
+               'labels = "jiralert:{group_label_key}"'
 
 errors = prometheus.Counter('errors_total', 'Number of errors')
 jira_errors = prometheus.Counter('jira_errors_total',
@@ -238,7 +229,6 @@ def do_file_issue_sync(project, issue_type, data):
         project=project,
         issuetype=issue_type,
         status=','.join(resolved_status),
-        group_key=prepare_group_key(data['groupKey']),
         group_label_key=prepare_group_label_key(data['groupKey'])
     )
     app.logger.debug(query)
