@@ -4,5 +4,5 @@ include MANIFEST.in
 # of including them in the source distribution.
 include requirements.txt tests-requirements.txt
 
-recursive-include jiralerts/templates *.tmpl
+recursive-include jiralerts/templates *.template
 recursive-include jiralerts/static *

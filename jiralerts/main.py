@@ -68,8 +68,8 @@ def prepare_tags(common_labels):
 JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
 JINJA_ENV.filters['prepareGroupKey'] = prepare_group_key
 
-SUMMARY_TMPL = JINJA_ENV.get_template('templates/summary.tmpl')
-DESCRIPTION_TMPL = JINJA_ENV.get_template('templates/description.tmpl')
+SUMMARY_TMPL = JINJA_ENV.get_template('templates/summary.template')
+DESCRIPTION_TMPL = JINJA_ENV.get_template('templates/description.template')
 DESCRIPTION_BOUNDARY = '_-- Alertmanager -- [only edit above]_'
 
 # Order for the search query is important for the query performance. It relies

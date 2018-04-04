@@ -38,10 +38,33 @@ WEBHOOK_PAYLOAD = {
 
 
 class TestJiralerts(unittest.TestCase):
-    def test(self):
+
+    def setUp(self):
+        self.maxDiff = 10000
+
+    def test_app(self):
         self.assertNotEqual(main.app, None)
 
-    # TODO write tests with a JIRA mock.
+    def test_template_description(self):
+        description = main.DESCRIPTION_TMPL.render(WEBHOOK_PAYLOAD)
+        self.assertEqual(description, """h2. Common information
+
+_Common_Annotations_:
+* *link*: https://example.com/Foo+Bar
+* *summary*: Alert summary
+
+_Common_Labels_:
+* alertname: "Foo_Bar"
+* instance: "foo"
+
+
+h2. Active alerts (total : 1)
+•  ([documentation|], [source|https://example.com])
+""")
+
+    def test_template_summary(self):
+        summary = main.SUMMARY_TMPL.render(WEBHOOK_PAYLOAD)
+        self.assertEqual(summary, "Foo_Bar: Alert summary")
 
 
 if __name__ == '__main__':

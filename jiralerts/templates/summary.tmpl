@@ -1,2 +1,0 @@
-{% set summary_blacklist = ('alertname', 'severity', 'project', 'issue_type') %}
-{{ commonLabels.alertname }}:{% if commonAnnotations.summary %} {{ commonAnnotations.summary }}{% else %}{% for k, v in groupLabels.items() if k not in summary_blacklist %} {{v}}{% endfor %}{% endif %}
