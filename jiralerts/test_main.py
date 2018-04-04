@@ -6,14 +6,27 @@ from jiralerts import main
 WEBHOOK_PAYLOAD = {
     "alerts": [{
         "annotations": {
-            "link": "https://example.com/Foo+Bar",
+            "documentation": "https://example.com/Foo",
             "summary": "Alert summary"
         },
         "endsAt": "0001-01-01T00:00:00Z",
-        "generatorURL": "https://example.com",
+        "generatorURL": "https://example.com/foo",
         "labels": {
             "alertname": "Foo_Bar",
             "instance": "foo"
+        },
+        "startsAt": "2017-02-02T16:51:13.507955756Z",
+        "status": "firing"
+    }, {
+        "annotations": {
+            "documentation": "https://example.com/Bar",
+            "summary": "Alert summary"
+        },
+        "endsAt": "0001-01-01T00:00:00Z",
+        "generatorURL": "https://example.com/bar",
+        "labels": {
+            "alertname": "Foo_Bar",
+            "instance": "bar"
         },
         "startsAt": "2017-02-02T16:51:13.507955756Z",
         "status": "firing"
@@ -28,7 +41,8 @@ WEBHOOK_PAYLOAD = {
     },
     "externalURL": "https://alertmanager.example.com",
     "groupLabels": {
-        "alertname": "Foo_Bar"
+        "alertname": "Foo_Bar",
+        "dc": "par",
     },
     "receiver": "jiralert",
     "status": "firing",
@@ -58,8 +72,9 @@ _Common_Labels_:
 * instance: "foo"
 
 
-h2. Active alerts (total : 1)
-•  ([documentation|], [source|https://example.com])
+h2. Active alerts (total : 2)
+•  ([documentation|https://example.com/Bar], [source|https://example.com/bar])
+•  ([documentation|https://example.com/Foo], [source|https://example.com/foo])
 """)
 
     def test_template_summary(self):
