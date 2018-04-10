@@ -13,3 +13,5 @@ h2. Active alerts (total : {{ firing_alerts|length }})
 {% for a in firing_alerts|sort(attribute='generatorURL') -%}
 • {{ a.annotations.description }} ([documentation|{{ a.annotations.documentation }}], [source|{{ a.generatorURL }}]){% for k, v in a.labels|dictsort if k not in commonLabels -%}, {{ k }}:{{ v }}{% endfor %}
 {% endfor %}
+
+Group key: {{ groupKey }}

@@ -204,7 +204,7 @@ def do_file_issue(project, issue_type, request):
             project, issue_type, data['version']))
         return "unknown message version %s" % data['version'], 400
 
-    if gourde.args.async:
+    if gourde.args.is_async:
         # We want a separate thread pool here to avoid blocking incoming
         # requests.
         gourde.async_threadpool.callInThread(do_file_issue_sync, project, issue_type, data)
@@ -232,6 +232,7 @@ def do_file_issue_sync(project, issue_type, data):
         status=','.join(resolved_status),
         group_label_key=prepare_group_label_key(data['groupKey'])
     )
+
     app.logger.debug(query)
     result = jira.search_issues(query) or []
     # sort issue by key to have them in order of creation.
@@ -271,7 +272,7 @@ def setup_app(server, res_transitions, res_status):
 def setup(args):
     """Setup everything."""
     setup_app(args.server, args.res_transitions, args.res_status)
-    if args.async:
+    if args.is_async:
         assert args.twisted, "--async only works with --twisted"
         from twisted.internet import reactor
         from twisted.python.threadpool import ThreadPool
@@ -303,6 +304,7 @@ def main():
     )
     parser.add_argument(
         '--async', default=False,
+        dest='is_async',  # async is a reserved keyword.
         action="store_true",
         help="Execute actions asynchronously (useful when jira takes more than 10s)."
     )

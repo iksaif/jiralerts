@@ -1,0 +1,13 @@
+{
+  "issues": [
+    {
+      "self": "http://jira.foo/FOO-1",
+      "key": "FOO-1",
+      "fields": {
+        "summary": "Test",
+        "description": "Test test",
+        "labels": ["jiralert:12345"]
+      }
+    }
+  ]
+}
