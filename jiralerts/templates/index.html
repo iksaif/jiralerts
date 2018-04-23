@@ -1,0 +1,13 @@
+{% extends "gourde/_base.html" %}
+
+{% block title %}JIRAlerts{% endblock %}
+
+{% block content %}
+    <h1>Home</h1>
+    Server:
+    {% if jira %}
+        {{ jira.client_info() }}
+    {% else %}
+        not connected
+    {% endif %}
+{% endblock %}

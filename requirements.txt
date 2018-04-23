@@ -1,4 +1,4 @@
-gourde>=0.0.2
+gourde>=0.1.0
 Jira
 
 # For exception handling.

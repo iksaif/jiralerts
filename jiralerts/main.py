@@ -12,18 +12,7 @@ import prometheus_client as prometheus
 from jira import JIRA
 
 
-app = flask.Flask(__name__)
-
-
-# Add our own index.
-@app.route('/')
-def index():
-    return 'jiralert: %s<br/> <a href="/metrics">metrics</a>' % (
-        jira.client_info()
-    )
-
-
-gourde = Gourde(app)
+gourde = Gourde(__name__)
 app = gourde.app  # This is a flask.Flask() app.
 metrics = gourde.metrics
 
@@ -95,6 +84,12 @@ request_time = prometheus.Histogram('request_latency_seconds',
 request_time_generic_issues = request_time.labels(endpoint='/issues')
 request_time_qualified_issues = request_time.labels(
     endpoint='/issues/<project>/<issue_type>')
+
+
+# Add our own index.
+@app.route('/')
+def index():
+    return flask.render_template("index.html", jira=jira)
 
 
 @jira_errors_transitions.count_exceptions()
