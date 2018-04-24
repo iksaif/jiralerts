@@ -5,4 +5,5 @@ include MANIFEST.in
 include requirements.txt tests-requirements.txt
 
 recursive-include jiralerts/templates *.template
+recursive-include jiralerts/templates *.html
 recursive-include jiralerts/static *
