@@ -5,6 +5,6 @@ Jira
 blinker
 raven
 
-# To get a real wsgi container.
-flask-twisted
-twisted
+# API
+flask_restplus
+

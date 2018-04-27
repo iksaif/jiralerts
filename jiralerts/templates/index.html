@@ -1,13 +1,63 @@
-{% extends "gourde/_base.html" %}
-
-{% block title %}JIRAlerts{% endblock %}
+{% extends "gourde/base.html" %}
 
 {% block content %}
     <h1>Home</h1>
-    Server:
-    {% if jira %}
-        {{ jira.client_info() }}
-    {% else %}
-        not connected
-    {% endif %}
+    <div class="row">
+        <ul class="list-group">
+            <li class="list-group-item">
+                Server:
+                {% if manager.jira %}
+                    {{ manager.jira.client_info() }}
+                {% else %}
+                    not connected
+                {% endif %}
+            </li>
+            <li class="list-group-item">
+                Start time: {{ starttime|pretty_timestamp }}
+            </li>
+        </ul>
+    </div>
+    <h2>Last requests</h2>
+    <div class="row">
+        {% for event in manager.history %}
+            {% if event %}
+                <div class="card w-100 mt-1 border-{% if event.response.1 < 300 %}success{% else %}warning{% endif %}">
+                    <div class="card-header">
+                        {{ event.project }} {{ event.issue_type }}
+                    </div>
+                    <div class="card-body">
+                        <a class="btn btn-primary btn-sm float-right" data-toggle="collapse"
+                           href="#collapse-{{ event.id }}"
+                           aria-expanded="false" aria-controls="collapse-{{ event.id }}">
+                            Raw request...
+                        </a>
+
+                        At: {{ event.timestamp|pretty_timestamp }}<br/>
+                        From: <a href="{{ event.request.externalURL }}">{{ event.request.externalURL }}</a><br/>
+
+                        <div class="collapse"
+                             id="collapse-{{ event.id }}">
+                            <code>
+                                <pre>{{ event.request|pretty_json|safe }}</pre>
+                            </code>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">{{ event.response.0.status }} {{ event.response.1 }}</h5>
+                        {% if event.response.0.issues %}
+                            {% for status, issues in event.response.0.issues.items() %}
+                                {% if issues %}
+                                    <strong>{{ status }}</strong>:
+                                    {% for issue in issues %}
+                                        <a href="{{ issue.permalink() }}">{{ issue.key }}</a>
+                                    {% endfor %}
+                                    <br/>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
 {% endblock %}
