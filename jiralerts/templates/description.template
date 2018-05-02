@@ -1,4 +1,5 @@
 h2. Common information
+{noformat:borderStyle=none|bgColor=#FFFFFF}Group key: {{ groupKey }}{noformat}
 
 _Common_Annotations_:
 {% for k, v in commonAnnotations|dictsort -%}
@@ -13,5 +14,3 @@ h2. Active alerts (total : {{ firing_alerts|length }})
 {% for a in firing_alerts|sort(attribute='generatorURL') -%}
 • {{ a.annotations.description }} ([documentation|{{ a.annotations.documentation }}], [source|{{ a.generatorURL }}]){% for k, v in a.labels|dictsort if k not in commonLabels -%}, {{ k }}:{{ v }}{% endfor %}
 {% endfor %}
-
-Group key: {{ groupKey }}

@@ -97,6 +97,8 @@ class TestJiralerts(unittest.TestCase):
         self.assertEqual(
             description,
             """h2. Common information
+{noformat:borderStyle=none|bgColor=#FFFFFF}Group key: \
+{}/{}/{notify="default":{alertname="Foo_Bar", instance="foo"}{noformat}
 
 _Common_Annotations_:
 * *link*: https://example.com/Foo+Bar
@@ -112,9 +114,7 @@ _Common_Labels_:
 h2. Active alerts (total : 2)
 •  ([documentation|https://example.com/Bar], [source|https://example.com/bar])
 •  ([documentation|https://example.com/Foo], [source|https://example.com/foo])
-
-
-Group key: {}/{}/{notify="default":{alertname="Foo_Bar", instance="foo"}""",
+""",
         )
 
     def test_template_summary(self):
