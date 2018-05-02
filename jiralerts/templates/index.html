@@ -49,7 +49,7 @@
                                 {% if issues %}
                                     <strong>{{ status }}</strong>:
                                     {% for issue in issues %}
-                                        <a href="{{ issue.permalink() }}">{{ issue.key }}</a>
+                                        <a href="{{ issue }}">{{ issue.split('/')[-1] }}</a>
                                     {% endfor %}
                                     <br/>
                                 {% endif %}
