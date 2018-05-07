@@ -2,6 +2,7 @@
 
 import flask
 import flask_restplus
+import flask_cors
 
 
 # TODO: be stricter in the model.
@@ -35,6 +36,9 @@ def create_api(app, manager):
     issue = api.model("Issue", WEBHOOK_FIELDS)
 
     app.register_blueprint(blueprint, url_prefix="/api")
+
+    # Allow others to request swagger stuff without restrictions.
+    flask_cors.CORS(app, resources={r"/api/swagger.json": {"origins": "*"}})
 
     @ns.route("")
     class Issues(flask_restplus.Resource):

@@ -7,4 +7,5 @@ raven
 
 # API
 flask_restplus
+flask-cors
 
