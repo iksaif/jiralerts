@@ -27,8 +27,8 @@
                     </div>
                     <div class="card-body">
                         <a class="btn btn-primary btn-sm float-right" data-toggle="collapse"
-                           href="#collapse-{{ event.id }}"
-                           aria-expanded="false" aria-controls="collapse-{{ event.id }}">
+                           href="#collapse-{{ event.event_id }}"
+                           aria-expanded="false" aria-controls="collapse-{{ event.event_id }}">
                             Raw request...
                         </a>
 
@@ -36,7 +36,7 @@
                         From: <a href="{{ event.request.externalURL }}">{{ event.request.externalURL }}</a><br/>
 
                         <div class="collapse"
-                             id="collapse-{{ event.id }}">
+                             id="collapse-{{ event.event_id }}">
                             <code>
                                 <pre>{{ event.request|pretty_json|safe }}</pre>
                             </code>

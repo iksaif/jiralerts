@@ -66,7 +66,7 @@ def prepare_tags(common_labels):
 class Event(object):
 
     def __init__(self, project, issue_type, request, response):
-        self.event = id(self)
+        self.event_id = id(self)
         self.timestamp = time.time()
         self.project = project
         self.issue_type = issue_type
