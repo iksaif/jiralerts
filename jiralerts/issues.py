@@ -218,7 +218,7 @@ class Manager(object):
         self, project, issue_type, issue, resolved, summary, description, tags
     ):
         """Update and maybe resolve an issue."""
-        resolved = False
+        is_closed = False
         self.logger.debug(
             "issue (%s, %s), jira issue found: %s" % (project, issue_type, issue.key)
         )
@@ -233,7 +233,7 @@ class Manager(object):
             ]
             if valid_trans:
                 self.close(issue, valid_trans[0]["id"])
-                resolved = True
+                is_closed = True
             else:
                 self.logger.warning("Unable to find transition to close %s" % issue)
 
@@ -242,7 +242,7 @@ class Manager(object):
         self.logger.info(
             "issue (%s, %s), %s updated" % (project, issue_type, issue.key)
         )
-        return resolved
+        return is_closed
 
     def do_file_issue(self, project, issue_type, payload):
         if not self.ready():
@@ -304,10 +304,10 @@ class Manager(object):
         issues["found"] = [issue.permalink() for issue in result]
 
         for issue in result:
-            resolved = self.update_or_resolve_issue(
+            is_closed = self.update_or_resolve_issue(
                 project, issue_type, issue, resolved, summary, description, tags
             )
-            issues["resolved" if resolved else "updated"].append(issue.permalink())
+            issues["resolved" if is_closed else "updated"].append(issue.permalink())
         if not result:
             # Do not create an issue for resolved incidents that were never filed.
             if not resolved:
