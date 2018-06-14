@@ -11,6 +11,6 @@ _Common_Labels_:
 {% endfor %}
 {% set firing_alerts = alerts | selectattr('status', "equalto", 'firing') | list %}
 h2. Active alerts (total : {{ firing_alerts|length }})
-{% for a in firing_alerts|sort(attribute='generatorURL') -%}
+{% for a in firing_alerts|sort(attribute='hash') -%}
 • {{ a.annotations.description }} ([documentation|{{ a.annotations.documentation }}], [source|{{ a.generatorURL }}]){% for k, v in a.labels|dictsort if k not in commonLabels -%}, {{ k }}:{{ v }}{% endfor %}
 {% endfor %}

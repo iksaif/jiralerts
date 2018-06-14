@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
+import collections
+import copy
 import hashlib
 import jinja2
-import os
 import logging
-import collections
+import os
 import time
+import json
 
 import prometheus_client as prometheus
 from jira import JIRA, JIRAError
@@ -276,11 +278,25 @@ class Manager(object):
         # Record a fake response for async requests.
         self.record(project, issue_type, data, resp)
 
+    @staticmethod
+    def prepare_data(data):
+        # Patch data to make sure it has all we need.
+        data = copy.deepcopy(data)
+        if 'alerts' not in data:
+            data['alerts'] = []
+        for alert in data['alerts']:
+            # Generate a hash to make sorting more stable.
+            alert['hash'] = hashlib.sha1(
+                json.dumps(data, sort_keys=True).encode()).hexdigest()
+        return data
+
     @errors.count_exceptions()
     def do_file_issue_sync(self, project, issue_type, data):
         issues = {"created": [], "found": [], "updated": [], "resolved": []}
 
         self.logger.info("issue: %s %s" % (project, issue_type))
+
+        data = self.prepare_data(data)
 
         resolved = data["status"] == "resolved"
         tags = prepare_tags(data["commonLabels"])

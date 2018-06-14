@@ -93,7 +93,8 @@ class TestJiralerts(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
 
     def test_template_description(self):
-        description = issues.Manager.DESCRIPTION_TMPL.render(WEBHOOK_PAYLOAD)
+        data = issues.Manager.prepare_data(WEBHOOK_PAYLOAD)
+        description = issues.Manager.DESCRIPTION_TMPL.render(data)
         self.assertEqual(
             description,
             """h2. Common information
@@ -112,13 +113,14 @@ _Common_Labels_:
 
 
 h2. Active alerts (total : 2)
-•  ([documentation|https://example.com/Bar], [source|https://example.com/bar])
 •  ([documentation|https://example.com/Foo], [source|https://example.com/foo])
+•  ([documentation|https://example.com/Bar], [source|https://example.com/bar])
 """,
         )
 
     def test_template_summary(self):
-        summary = issues.Manager.SUMMARY_TMPL.render(WEBHOOK_PAYLOAD)
+        data = issues.Manager.prepare_data(WEBHOOK_PAYLOAD)
+        summary = issues.Manager.SUMMARY_TMPL.render(data)
         self.assertEqual(summary, "Foo_Bar: Alert summary")
 
     def test_issues(self):
