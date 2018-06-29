@@ -100,6 +100,7 @@ class TestJiralerts(unittest.TestCase):
             """h2. Common information
 {noformat:borderStyle=none|bgColor=#FFFFFF}Group key: \
 {}/{}/{notify="default":{alertname="Foo_Bar", instance="foo"}{noformat}
+[Alertmanager|https://alertmanager.example.com/#/alerts?receiver=jiralert&filter=%7Balertname%3D%22Foo_Bar%22%7D]
 
 _Common_Annotations_:
 * *link*: https://example.com/Foo+Bar
@@ -113,8 +114,10 @@ _Common_Labels_:
 
 
 h2. Active alerts (total : 2)
-•  ([documentation|https://example.com/Foo], [source|https://example.com/foo])
-•  ([documentation|https://example.com/Bar], [source|https://example.com/bar])
+•  ([documentation|https://example.com/Foo], [source|https://example.com/foo]) \
+- {noformat:borderStyle=none|bgColor=#FFFFFF}513bc547{noformat}
+•  ([documentation|https://example.com/Bar], [source|https://example.com/bar]) \
+- {noformat:borderStyle=none|bgColor=#FFFFFF}910c556d{noformat}
 """,
         )
 

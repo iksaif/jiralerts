@@ -1,5 +1,6 @@
 h2. Common information
 {noformat:borderStyle=none|bgColor=#FFFFFF}Group key: {{ groupKey }}{noformat}
+[Alertmanager|{{ externalURL }}/#/alerts?receiver={{ receiver }}&filter=%7Balertname%3D%22{{ commonLabels.alertname }}%22%7D]
 
 _Common_Annotations_:
 {% for k, v in commonAnnotations|dictsort -%}
@@ -12,5 +13,5 @@ _Common_Labels_:
 {% set firing_alerts = alerts | selectattr('status', "equalto", 'firing') | list %}
 h2. Active alerts (total : {{ firing_alerts|length }})
 {% for a in firing_alerts|sort(attribute='hash') -%}
-• {{ a.annotations.description }} ([documentation|{{ a.annotations.documentation }}], [source|{{ a.generatorURL }}]){% for k, v in a.labels|dictsort if k not in commonLabels -%}, {{ k }}:{{ v }}{% endfor %}
+• {{ a.annotations.description }} ({% if a.annotations.documentation %}[documentation|{{ a.annotations.documentation }}], {% endif %}[source|{{ a.generatorURL }}]){% for k, v in a.labels|dictsort if k not in commonLabels -%}, {{ k }}:{{ v }}{% endfor %} - {noformat:borderStyle=none|bgColor=#FFFFFF}{{ a.hash }}{noformat}
 {% endfor %}

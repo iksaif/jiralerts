@@ -285,9 +285,16 @@ class Manager(object):
         if 'alerts' not in data:
             data['alerts'] = []
         for alert in data['alerts']:
-            # Generate a hash to make sorting more stable.
+            # Generate a short hash to make sorting more stable.
+            simple_alert = copy.deepcopy(alert)
+            # Remove things that change all the time.
+            if 'startsAt' in simple_alert:
+                del simple_alert['startsAt']
+            if 'endsAt' in simple_alert:
+                del simple_alert['endsAt']
             alert['hash'] = hashlib.sha1(
-                json.dumps(data, sort_keys=True).encode()).hexdigest()
+                json.dumps(simple_alert, sort_keys=True).encode()
+            ).hexdigest()[:8]
         return data
 
     @errors.count_exceptions()
