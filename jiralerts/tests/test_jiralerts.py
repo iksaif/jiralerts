@@ -114,10 +114,10 @@ _Common_Labels_:
 
 
 h2. Active alerts (total : 2)
-•  ([documentation|https://example.com/Foo], [source|https://example.com/foo]) \
-- {noformat:borderStyle=none|bgColor=#FFFFFF}513bc547{noformat}
-•  ([documentation|https://example.com/Bar], [source|https://example.com/bar]) \
-- {noformat:borderStyle=none|bgColor=#FFFFFF}910c556d{noformat}
+•  ([documentation|https://example.com/Foo], [source|https://example.com/foo])\
+{color:#fff} - 513bc547{color}
+•  ([documentation|https://example.com/Bar], [source|https://example.com/bar])\
+{color:#fff} - 910c556d{color}
 """,
         )
 
