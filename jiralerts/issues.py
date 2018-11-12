@@ -44,6 +44,7 @@ request_time_qualified_issues = request_time.labels(
 
 class Error(Exception):
     """All local errors."""
+
     pass
 
 
@@ -66,7 +67,6 @@ def prepare_tags(common_labels):
 
 
 class Event(object):
-
     def __init__(self, project, issue_type, request, response):
         self.event_id = id(self)
         self.timestamp = time.time()
@@ -78,6 +78,7 @@ class Event(object):
 
 class Manager(object):
     """Issue manager."""
+
     JINJA_ENV = jinja2.Environment(loader=jinja2.FileSystemLoader(ROOT_DIR))
 
     SUMMARY_TMPL = JINJA_ENV.get_template("templates/summary.template")
@@ -282,17 +283,17 @@ class Manager(object):
     def prepare_data(data):
         # Patch data to make sure it has all we need.
         data = copy.deepcopy(data)
-        if 'alerts' not in data:
-            data['alerts'] = []
-        for alert in data['alerts']:
+        if "alerts" not in data:
+            data["alerts"] = []
+        for alert in data["alerts"]:
             # Generate a short hash to make sorting more stable.
             simple_alert = copy.deepcopy(alert)
             # Remove things that change all the time.
-            if 'startsAt' in simple_alert:
-                del simple_alert['startsAt']
-            if 'endsAt' in simple_alert:
-                del simple_alert['endsAt']
-            alert['hash'] = hashlib.sha1(
+            if "startsAt" in simple_alert:
+                del simple_alert["startsAt"]
+            if "endsAt" in simple_alert:
+                del simple_alert["endsAt"]
+            alert["hash"] = hashlib.sha1(
                 json.dumps(simple_alert, sort_keys=True).encode()
             ).hexdigest()[:8]
         return data

@@ -7,7 +7,8 @@ are closed or reopened.
 Given how generic JIRA is, the integration attempts several different transitions
 that may be available for an issue.
 
-__Consider this an opinionated example snippet. It may not fit your use case without modification.__
+This is copied from [criteo-forks/jiralerts](https://github.com/criteo-forks/jiralerts)
+and [fabxc/jiralerts](https://github.com/fabxc/jiralerts).
 
 ## Running it
 
@@ -26,3 +27,9 @@ receivers:
 
 A typical usage could be a single 'ALERTS' projects where the label in the URL
 refers to the affected system or the team that should handle the issue.
+
+## Goodies
+
+Go to http://localhost:9050/ for the UI. `/-/health` will provide a simple health check.
+
+The API is availabel on [/api/](http://localhost:9050/api/).

@@ -23,6 +23,7 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class Error(Exception):
     """All local errors."""
+
     pass
 
 

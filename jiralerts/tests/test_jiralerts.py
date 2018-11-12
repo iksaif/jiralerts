@@ -14,7 +14,8 @@ WEBHOOK_PAYLOAD = {
     "alerts": [
         {
             "annotations": {
-                "documentation": "https://example.com/Foo", "summary": "Alert summary"
+                "documentation": "https://example.com/Foo",
+                "summary": "Alert summary",
             },
             "endsAt": "0001-01-01T00:00:00Z",
             "generatorURL": "https://example.com/foo",
@@ -24,7 +25,8 @@ WEBHOOK_PAYLOAD = {
         },
         {
             "annotations": {
-                "documentation": "https://example.com/Bar", "summary": "Alert summary"
+                "documentation": "https://example.com/Bar",
+                "summary": "Alert summary",
             },
             "endsAt": "0001-01-01T00:00:00Z",
             "generatorURL": "https://example.com/bar",
@@ -34,7 +36,8 @@ WEBHOOK_PAYLOAD = {
         },
     ],
     "commonAnnotations": {
-        "link": "https://example.com/Foo+Bar", "summary": "Alert summary"
+        "link": "https://example.com/Foo+Bar",
+        "summary": "Alert summary",
     },
     "commonLabels": {
         "alertname": "Foo_Bar",
@@ -87,6 +90,10 @@ class TestJiralerts(unittest.TestCase):
             self.gourde = main.create_app(self.args, registry=self.registry)
         self.client = self.gourde.app.test_client()
 
+        # JIRA uses `sleep` internally and we do not want to wait.
+        self._sleep_patcher = mock.patch('time.sleep')
+        self._sleep_mock = self._sleep_patcher.start()
+
     def test_healthy(self):
         with httmock.HTTMock(jira_mock):
             r = self.client.get("/-/healthy")
@@ -128,7 +135,10 @@ h2. Active alerts (total : 2)
 
     def test_issues(self):
         for url in (
-            "/issues/FOO/Alert", "/issues", "/api/issues/FOO/Alert", "/api/issues"
+            "/issues/FOO/Alert",
+            "/issues",
+            "/api/issues/FOO/Alert",
+            "/api/issues",
         ):
             with httmock.HTTMock(jira_mock):
                 r = self.client.post(
